@@ -1,3 +1,4 @@
+
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="100%" height="100%">
     <foreignObject width="100%" height="100%" requiredExtensions="http://www.w3.org/1999/xhtml">
     <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
@@ -9,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&amp;family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-    <link rel="stylesheet" href="./static/css.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/xk234/x11/static/css.css" />
     <script src="https://cdn.jsdelivr.net/npm/iso-639-1@2.1.11/build/index.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/libcurl.js@latest/libcurl_full.js"></script>
 </head>
@@ -1614,7 +1615,7 @@
                 </div>
             </div>
         </main>
-        <script src="./static/js.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/xk234/x11/static/js.js"></script>
         <div id="tutorialOverlay" style="display:none; position:fixed; inset:0; z-index:99999; pointer-events:all;">
         <div id="tutorialBackdrop"
             style="position:absolute; inset:0; backdrop-filter:blur(10px); -webkit-backdrop-filter: blur(10px); transition:opacity .35s; opacity:0; pointer-events:all;">
