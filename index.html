@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>x11: Decompiler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --gx-red: #FA1F4E;
+      --gx-red-dim: #c4163a;
+      --gx-red-glow: rgba(250, 31, 78, 0.45);
+      --bg-deep: #07070b;
+      --bg-panel: #0e0e14;
+      --bg-elevated: #14141c;
+      --border: #1f1f2a;
+      --border-hover: #2a2a38;
+      --text: #e8e8ed;
+      --text-muted: #8b8b9a;
+      --text-dim: #5c5c6c;
+      --success: #22c55e;
+      --radius: 10px;
+      --font: 'Inter', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-deep);
+      color: var(--text);
+      font-family: var(--font);
+      overflow: hidden;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(ellipse 120% 80% at 50% -30%, rgba(250, 31, 78, 0.12), transparent 55%),
+        radial-gradient(ellipse 80% 50% at 100% 100%, rgba(138, 128, 172, 0.06), transparent 50%),
+        var(--bg-deep);
+    }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(14, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      z-index: 20;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--gx-red), #ff4d6d);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 13px;
+      color: white;
+      box-shadow: 0 0 20px var(--gx-red-glow);
+      letter-spacing: -0.5px;
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .brand-text strong {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-text span {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Main layout */
+    .main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      min-height: 0;
+    }
+
+    .editor-pane {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid var(--border);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .lang-select-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .lang-select-wrap label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    select, .mime-input {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    select:hover, .mime-input:hover {
+      border-color: var(--border-hover);
+    }
+
+    select:focus, .mime-input:focus {
+      border-color: var(--gx-red);
+      box-shadow: 0 0 0 3px var(--gx-red-glow);
+    }
+
+    #monaco-container {
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* Side panel */
+    .side-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-panel);
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      padding: 18px 18px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field:last-child {
+      margin-bottom: 0;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .mime-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .mime-row select {
+      flex: 1;
+    }
+
+    .mime-input {
+      flex: 1.2;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font);
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gx-red), #ff3d66);
+      color: white;
+      box-shadow: 0 2px 12px var(--gx-red-glow);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 4px 20px var(--gx-red-glow);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      filter: none;
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      background: #1a1a24;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 8px 12px;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      background: var(--bg-elevated);
+    }
+
+    .btn-full {
+      width: 100%;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-row .btn {
+      flex: 1;
+    }
+
+    /* Output URL box */
+    .url-box {
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      word-break: break-all;
+      max-height: 140px;
+      overflow-y: auto;
+      min-height: 64px;
+    }
+
+    .url-box.has-url {
+      color: #c4c4d0;
+      border-color: #2a2a38;
+    }
+
+    .url-box .highlight {
+      color: var(--gx-red);
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .stat {
+      background: var(--bg-deep);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--mono);
+      color: var(--text);
+    }
+
+    .stat-value.good {
+      color: var(--success);
+    }
+
+    /* Status / toast */
+    .status {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      min-height: 18px;
+    }
+
+    .status.ok { color: var(--success); }
+    .status.err { color: var(--gx-red); }
+
+    /* Decompile overlay */
+    #decompile-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-deep);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      gap: 16px;
+    }
+
+    #decompile-overlay.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--gx-red);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .decompile-msg {
+      font-size: 15px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Footer note */
+    .footer-note {
+      padding: 12px 18px;
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.45;
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+    }
+
+    .footer-note code {
+      font-family: var(--mono);
+      background: var(--bg-deep);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2a2a38;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a3a4a;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .main {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+      .editor-pane {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .side-panel {
+        max-height: 42vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="decompile-overlay">
+    <div class="spinner"></div>
+    <div class="decompile-msg">Decompiling payload…</div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">x11</div>
+      <div class="brand-text">
+        <strong>x11: Decompiler</strong>
+        <span>Static in-URL HTML • LZ safe encoding</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="btn btn-ghost" id="btn-clear" title="Clear editor">Clear</button>
+      <button class="btn btn-secondary" id="btn-example">Load example</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="editor-pane">
+      <div class="editor-toolbar">
+        <div class="lang-select-wrap">
+          <label for="lang-select">Language</label>
+          <select id="lang-select">
+            <option value="html" selected>HTML</option>
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="css">CSS</option>
+            <option value="json">JSON</option>
+            <option value="markdown">Markdown</option>
+            <option value="xml">XML</option>
+            <option value="svg">SVG</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="csharp">C#</option>
+            <option value="cpp">C++</option>
+            <option value="c">C</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+            <option value="php">PHP</option>
+            <option value="ruby">Ruby</option>
+            <option value="sql">SQL</option>
+            <option value="shell">Shell</option>
+            <option value="yaml">YAML</option>
+            <option value="plaintext">Plain Text</option>
+          </select>
+        </div>
+        <div style="font-size:12px;color:var(--text-dim)">Monaco Editor • ~60 languages supported</div>
+      </div>
+      <div id="monaco-container"></div>
+    </div>
+
+    <aside class="side-panel">
+      <div class="panel-section">
+        <h3>Blob MIME Type</h3>
+        <div class="field">
+          <div class="mime-row">
+            <select id="mime-preset">
+              <option value="text/html">text/html</option>
+              <option value="text/plain">text/plain</option>
+              <option value="text/css">text/css</option>
+              <option value="application/javascript">application/javascript</option>
+              <option value="application/json">application/json</option>
+              <option value="image/svg+xml">image/svg+xml</option>
+              <option value="image/png">image/png</option>
+              <option value="image/jpeg">image/jpeg</option>
+              <option value="image/webp">image/webp</option>
+              <option value="application/pdf">application/pdf</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" id="custom-mime-wrap" style="display:none">
+          <label>Custom MIME</label>
+          <input class="mime-input" id="mime-custom" placeholder="e.g. text/markdown" value="text/html" />
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Encode &amp; Share</h3>
+        <div class="btn-row" style="margin-bottom:12px">
+          <button class="btn btn-primary btn-full" id="btn-generate">
+            Generate Shareable URL
+          </button>
+        </div>
+        <div class="field">
+          <label>Encoded URL <span style="color:var(--text-dim);font-weight:400">(site#payload)</span></label>
+          <div class="url-box" id="url-output">Click Generate to create a shareable link…</div>
+        </div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn-secondary" id="btn-copy" disabled>Copy URL</button>
+          <button class="btn btn-secondary" id="btn-open" disabled>Open / Test</button>
+        </div>
+        <div class="stats" id="stats" style="display:none">
+          <div class="stat">
+            <div class="stat-label">Original</div>
+            <div class="stat-value" id="stat-orig">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">Compressed</div>
+            <div class="stat-value good" id="stat-comp">—</div>
+          </div>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+
+      <div class="footer-note">
+        <strong style="color:var(--text-muted)">How it works</strong><br>
+        Content is LZ-compressed then URL-safe encoded and placed after the <strong>first</strong> <code>#</code>.
+        Anything after that first hash is treated as payload — extra <code>?</code>, <code>#</code> or <code>/</code> never break it.
+        On load the page decompresses → creates a Blob of the chosen MIME → <code>location.replace(blobUrl)</code>.
+      </div>
+    </aside>
+  </div>
+
+  <!-- LZ-String -->
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+
+  <!-- Monaco loader -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ─── Decompile path (runs immediately) ───────────────────────────────
+      const rawHash = location.hash || '';
+      if (rawHash.length > 1) {
+        // Take everything after the FIRST # (left-to-right). Safe against nested # ? /
+        const payload = rawHash.slice(1);
+
+        document.getElementById('decompile-overlay').classList.add('active');
+
+        try {
+          const decoded = LZString.decompressFromEncodedURIComponent(payload);
+          if (decoded === null || decoded === undefined) {
+            throw new Error('Failed to decompress payload');
+          }
+
+          // Format: first line is MIME type, rest is content
+          // (we use \n as separator – safe because MIME never contains newline)
+          const nl = decoded.indexOf('\n');
+          let mime = 'text/html';
+          let content = decoded;
+
+          if (nl !== -1) {
+            mime = decoded.slice(0, nl).trim() || 'text/html';
+            content = decoded.slice(nl + 1);
+          }
+
+          const blob = new Blob([content], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+
+          // Small delay so the overlay is visible for a moment
+          setTimeout(() => {
+            location.replace(blobUrl);
+          }, 280);
+        } catch (err) {
+          document.querySelector('.decompile-msg').textContent =
+            'Decompile failed: ' + (err.message || 'invalid payload');
+          document.querySelector('.spinner').style.display = 'none';
+        }
+        return; // stop UI init
+      }
+
+      // ─── UI path ────────────────────────────────────────────────────────
+      let editor = null;
+      let lastUrl = '';
+
+      const $ = (id) => document.getElementById(id);
+      const statusEl = $('status');
+      const urlOutput = $('url-output');
+      const statsEl = $('stats');
+
+      function setStatus(msg, type = '') {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      function getMime() {
+        const preset = $('mime-preset').value;
+        if (preset === 'custom') {
+          return ($('mime-custom').value || 'text/html').trim();
+        }
+        return preset;
+      }
+
+      // Monaco init
+      require.config({
+        paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' }
+      });
+
+      require(['vs/editor/editor.main'], function () {
+        // Opera GX-ish dark theme
+        monaco.editor.defineTheme('gx-dark', {
+          base: 'vs-dark',
+          inherit: true,
+          rules: [
+            { token: 'comment', foreground: '5c5c6c', fontStyle: 'italic' },
+            { token: 'keyword', foreground: 'FA1F4E' },
+            { token: 'string', foreground: 'f0a0b0' },
+            { token: 'number', foreground: 'ff8a9a' },
+            { token: 'tag', foreground: 'FA1F4E' },
+            { token: 'attribute.name', foreground: 'c0b0d0' },
+            { token: 'attribute.value', foreground: 'f0a0b0' },
+          ],
+          colors: {
+            'editor.background': '#0e0e14',
+            'editor.foreground': '#e8e8ed',
+            'editor.lineHighlightBackground': '#14141c',
+            'editor.selectionBackground': '#FA1F4E33',
+            'editorCursor.foreground': '#FA1F4E',
+            'editorLineNumber.foreground': '#3a3a4a',
+            'editorLineNumber.activeForeground': '#8b8b9a',
+            'editorIndentGuide.background': '#1f1f2a',
+            'editorIndentGuide.activeBackground': '#2a2a38',
+            'scrollbarSlider.background': '#2a2a3888',
+            'scrollbarSlider.hoverBackground': '#3a3a4a',
+          }
+        });
+
+        editor = monaco.editor.create($('monaco-container'), {
+          value: '',
+          language: 'html',
+          theme: 'gx-dark',
+          fontSize: 13.5,
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          fontLigatures: true,
+          minimap: { enabled: true, scale: 0.8 },
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          padding: { top: 12, bottom: 12 },
+          renderLineHighlight: 'line',
+          cursorBlinking: 'smooth',
+          smoothScrolling: true,
+          bracketPairColorization: { enabled: true },
+          tabSize: 2,
+        });
+
+        // Language switcher
+        $('lang-select').addEventListener('change', (e) => {
+          monaco.editor.setModelLanguage(editor.getModel(), e.target.value);
+        });
+
+        // MIME preset
+        $('mime-preset').addEventListener('change', (e) => {
+          const isCustom = e.target.value === 'custom';
+          $('custom-mime-wrap').style.display = isCustom ? 'block' : 'none';
+          if (!isCustom) {
+            $('mime-custom').value = e.target.value;
+          }
+        });
+
+        // Generate
+        $('btn-generate').addEventListener('click', () => {
+          const content = editor.getValue();
+          if (!content.trim()) {
+            setStatus('Editor is empty', 'err');
+            return;
+          }
+
+          const mime = getMime();
+          // Pack: mime\ncontent
+          const packed = mime + '\n' + content;
+
+          try {
+            const compressed = LZString.compressToEncodedURIComponent(packed);
+            if (!compressed) {
+              throw new Error('Compression returned empty');
+            }
+
+            // Build URL using current origin + path, then #payload
+            // First # is the only one that matters
+            const base = location.origin + location.pathname;
+            const fullUrl = base + '#' + compressed;
+            lastUrl = fullUrl;
+
+            urlOutput.innerHTML = '<span class="highlight">' +
+              escapeHtml(base) + '#</span>' +
+              escapeHtml(compressed.slice(0, 80)) +
+              (compressed.length > 80 ? '…' : '');
+            urlOutput.classList.add('has-url');
+            urlOutput.title = fullUrl;
+
+            // Stats
+            const origBytes = new TextEncoder().encode(content).length;
+            const compBytes = compressed.length; // approx (ASCII)
+            const ratio = ((1 - compBytes / (origBytes || 1)) * 100).toFixed(1);
+
+            $('stat-orig').textContent = formatBytes(origBytes);
+            $('stat-comp').textContent = formatBytes(compBytes) + ' (−' + ratio + '%)';
+            statsEl.style.display = 'grid';
+
+            $('btn-copy').disabled = false;
+            $('btn-open').disabled = false;
+            setStatus('URL generated • LZ + URL-safe • first-# detection', 'ok');
+          } catch (err) {
+            setStatus('Encode failed: ' + err.message, 'err');
+          }
+        });
+
+        // Copy
+        $('btn-copy').addEventListener('click', async () => {
+          if (!lastUrl) return;
+          try {
+            await navigator.clipboard.writeText(lastUrl);
+            setStatus('Copied to clipboard', 'ok');
+          } catch {
+            // fallback
+            const ta = document.createElement('textarea');
+            ta.value = lastUrl;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            setStatus('Copied (fallback)', 'ok');
+          }
+        });
+
+        // Open / Test – force full navigation so the decompile path runs on load
+        $('btn-open').addEventListener('click', () => {
+          if (lastUrl) {
+            // Hash-only change does not re-execute the page script.
+            // Setting href then reloading guarantees the first-# decompile path runs.
+            location.href = lastUrl;
+            // Tiny delay then reload if we are still on the editor (same-document navigation)
+            setTimeout(() => {
+              if (!document.getElementById('decompile-overlay')?.classList.contains('active')) {
+                location.reload();
+              }
+            }, 30);
+          }
+        });
+
+        // Clear
+        $('btn-clear').addEventListener('click', () => {
+          editor.setValue('');
+          lastUrl = '';
+          urlOutput.textContent = 'Click Generate to create a shareable link…';
+          urlOutput.classList.remove('has-url');
+          urlOutput.title = '';
+          statsEl.style.display = 'none';
+          $('btn-copy').disabled = true;
+          $('btn-open').disabled = true;
+          setStatus('');
+        });
+
+        // Example
+        $('btn-example').addEventListener('click', () => {
+          const example = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>x11 Demo Page</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #07070b;
+      color: #e8e8ed;
+      font-family: system-ui, sans-serif;
+    }
+    .card {
+      background: #0e0e14;
+      border: 1px solid #1f1f2a;
+      border-radius: 16px;
+      padding: 40px 48px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(250, 31, 78, 0.15);
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #FA1F4E, #ff6b8a);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p { color: #8b8b9a; font-size: 1rem; }
+    .badge {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 6px 14px;
+      background: rgba(250, 31, 78, 0.15);
+      color: #FA1F4E;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>x11: Decompiler</h1>
+    <p>Static in-URL payload successfully decoded via Blob.</p>
+    <div class="badge">LZ-String • first-# detection</div>
+  </div>
+</body>
+</html>`;
+          editor.setValue(example);
+          monaco.editor.setModelLanguage(editor.getModel(), 'html');
+          $('lang-select').value = 'html';
+          $('mime-preset').value = 'text/html';
+          $('custom-mime-wrap').style.display = 'none';
+          setStatus('Example loaded – hit Generate Shareable URL', 'ok');
+        });
+
+        // Load a tiny default so the UI isn't empty
+        editor.setValue('<!-- Paste or write HTML / any text here -->\n');
+      });
+
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function formatBytes(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+      }
+    })();
+  </script>
+</body>
+</html>
