@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;overflow:hidden;background:#0e0d13}
+canvas{display:block;width:100%;height:100%}
+</style></head><body>
+<canvas id="c"></canvas>
+<script>
+const c=document.getElementById('c'),x=c.getContext('2d');
+function resize(){c.width=innerWidth;c.height=innerHeight}
+addEventListener('resize',resize);resize();
+const pts=Array.from({length:60},()=>({x:Math.random()*c.width,y:Math.random()*c.height,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4}));
+function frame(){
+  x.fillStyle='rgba(14,13,19,.25)';x.fillRect(0,0,c.width,c.height);
+  const ntp=window.__GX_NTP||{};
+  const cur=ntp.cursor||{x:c.width/2,y:c.height/2};
+  pts.forEach(p=>{
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0||p.x>c.width)p.vx*=-1;
+    if(p.y<0||p.y>c.height)p.vy*=-1;
+    const dx=p.x-cur.x,dy=p.y-cur.y,d=Math.hypot(dx,dy)||1;
+    x.beginPath();x.arc(p.x,p.y,2,0,6.28);x.fillStyle='rgba(250,30,78,'+(0.3+0.5*Math.max(0,1-d/400))+')';x.fill();
+  });
+  if(ntp.search){x.strokeStyle='rgba(250,30,78,.35)';x.strokeRect(ntp.search.x,ntp.search.y,ntp.search.w,ntp.search.h);}
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body></html>
